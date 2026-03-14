@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Fishing RPG: Master Edition [Final]</title>
+    <style>
+        :root { --day: #e3f2fd; --night: #0d1117; --boss: #ff1744; --gold: #ffd700; --xp: #9c27b0; --sp: #ff5722; --sonar: #00e676; }
+        body { font-family: 'Segoe UI', sans-serif; transition: 1s; margin: 0; background: var(--day); display: flex; flex-direction: column; align-items: center; }
+        body.night { background: var(--night); color: white; }
+        
+        #stats-bar { width: 100%; background: #24292e; color: white; padding: 12px; display: flex; justify-content: space-around; position: sticky; top: 0; z-index: 100; font-weight: bold; }
+        .game-world { display: flex; gap: 15px; padding: 20px; max-width: 1550px; width: 100%; box-sizing: border-box; }
+        
+        #main-area { flex: 1.5; background: #fff; border-radius: 15px; padding: 20px; box-shadow: 0 4px 25px rgba(0,0,0,0.2); text-align: center; color: #333; position: relative; }
+        body.night #main-area { background: #1c2128; color: white; }
+        
+        #water-zone { height: 300px; border-radius: 12px; position: relative; margin: 15px 0; border: 4px solid #444; background: #0288d1; transition: 0.2s; overflow: hidden; }
+        .flash { background: #fff176 !important; }
+        #float { width: 16px; height: 45px; background: #ff5252; position: absolute; left: 50%; top: 50%; border: 2px solid white; border-radius: 20px; display: none; transform: translate(-50%, -50%); z-index: 5; }
+        .bite { animation: bob 0.2s infinite; background: #ffeb3b !important; }
+        @keyframes bob { 0%, 100% { transform: translate(-50%, -50%); } 50% { transform: translate(-50%, -22%); } }
+
+        .xp-wrap { width: 100%; background: #eee; height: 20px; border-radius: 10px; overflow: hidden; margin: 10px 0; position: relative; border: 1px solid #ccc; }
+        #xp-bar { height: 100%; background: var(--xp); width: 0%; transition: 0.3s; }
+        #xp-text-inside { position: absolute; width: 100%; text-align: center; top: 0; left: 0; font-size: 12px; line-height: 20px; font-weight: bold; color: #000; }
+
+        #boss-ui { display: none; padding: 10px; background: rgba(255, 23, 68, 0.1); border-radius: 10px; margin-bottom: 10px; }
+        .boss-active #boss-ui { display: block; }
+        .hp-bg { width: 100%; height: 25px; background: #333; border-radius: 15px; border: 3px solid var(--boss); overflow: hidden; }
+        #hp-fill { width: 0%; height: 100%; background: linear-gradient(90deg, #ff1744, #d50000); }
+
+        .panel { flex: 1; display: flex; flex-direction: column; gap: 12px; }
+        .screen { border-radius: 12px; padding: 15px; background: #fff; border: 1px solid #ddd; color: #333; font-size: 0.85em; }
+        body.night .screen { background: #1c2128; border-color: #444; color: #eee; }
+
+        .btn { padding: 10px; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; width: 100%; margin-top: 5px; transition: 0.2s; }
+        .btn-main { background: #2ecc71; color: white; font-size: 1.2em; height: 60px; }
+        .btn-boss { background: var(--boss); color: white; display: none; font-size: 1.4em; height: 70px; }
+        .boss-active .btn-main, .boss-active #loc-btn, .boss-active select { display: none; }
+        .boss-active .btn-boss { display: block; }
+
+        .boss-card { border: 2px solid #ccc; padding: 10px; border-radius: 8px; opacity: 0.4; filter: grayscale(1); margin-bottom: 5px; }
+        .boss-card.win { border-color: var(--gold); opacity: 1; filter: none; background: #fffde7; color: #333; }
+        .fish-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
+        .fish-item { border: 1px solid #eee; padding: 5px; border-radius: 5px; text-align: center; }
+        .fish-item.unlocked { border-color: var(--xp); background: #f3e5f5; color: #4a148c; font-weight: bold; }
+        .buff-active { color: var(--sp); font-weight: bold; animation: pulse 1s infinite; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+    </style>
+</head>
+<body class="day">
+
+<div id="stats-bar">
+    <div>💰 <span id="money">500</span></div>
+    <div>🌟 УР. <span id="lvl">1</span></div>
+    <div>💡 SP: <span id="sp">0</span></div>
+    <div>🌍 <span id="loc">Река</span></div>
+    <div>⏰ <span id="time">День</span></div>
+</div>
+
+<div class="game-world">
+    <div class="panel">
+        <div class="screen">
+            <h3 style="margin:0">🛒 Магазин</h3>
+            <div id="bait-shop" style="display:grid; grid-template-columns: 1fr 1fr; gap:5px; margin-top:10px;"></div>
+            <hr>
+            <div id="upgrades"></div>
+            <div id="tech-shop"></div>
+            <div id="buff-shop"></div>
+        </div>
+        <div class="screen">
+            <h3 style="margin:0">🌳 Навыки</h3>
+            <div style="display:grid; gap:5px; margin-top:10px;">
+                <button class="btn" style="background:#ff9800; color:white;" onclick="learn('luck')">🍀 Удача (Ур.<span id="s-luck">0</span>)</button>
+                <button class="btn" style="background:#3f51b5; color:white;" onclick="learn('fast')">⚡ Хватка (Ур.<span id="s-fast">0</span>)</button>
+            </div>
+        </div>
+        <div class="screen">
+            <h3 style="margin:0">🧪 Эффекты</h3>
+            <div id="active-buffs"><small>Нет эффектов</small></div>
+        </div>
+    </div>
+
+    <div id="main-area">
+        <div id="sonar-display" style="position:absolute; top:10px; right:10px; background:rgba(0,0,0,0.7); color:var(--sonar); padding:5px; border-radius:5px; display:none; border:1px solid var(--sonar); font-family:monospace; z-index:10;">📡 SONAR: <span id="sonar-text">...</span></div>
+        <div id="boss-ui">
+            <h2 id="boss-name" style="margin:0; color:var(--boss)">БОСС</h2>
+            <div id="boss-phase">Фаза 1/5</div>
+            <div class="hp-bg"><div id="hp-fill"></div></div>
+        </div>
+        <div class="xp-wrap"><div id="xp-bar"></div><div id="xp-text-inside">XP: 0 / 250</div></div>
+        <div id="water-zone"><div id="float"></div></div>
+        <div id="status">Забрось удочку!</div>
+        <select id="bait-select" style="width:100%; padding:12px; border-radius:8px; margin:10px 0; font-weight:bold;"></select>
+        <button id="action-btn" class="btn btn-main">ЗАБРОСИТЬ</button>
+        <button id="boss-btn" class="btn btn-boss" onmousedown="hitBoss()">ТЯНИ !!!</button>
+        <button id="loc-btn" class="btn" style="background:#f1c40f; margin-top:10px;">Сменить локацию</button>
+    </div>
+
+    <div class="panel">
+        <div class="screen">
+            <h3 style="margin:0; color:var(--gold)">🏆 Турнир</h3>
+            <div id="tourney-info">Ожидание...</div>
+        </div>
+        <div class="screen">
+            <h3 style="margin:0; color:var(--xp)">👑 Царский Атлас</h3>
+            <div id="boss-atlas" style="margin-top:10px;"></div>
+        </div>
+        <div class="screen">
+            <h3 style="margin:0">🐟 Обычные виды</h3>
+            <div id="catalog" class="fish-grid" style="margin-top:10px;"></div>
+        </div>
+        <div class="screen">
+            <h3 style="margin:0">🎒 Садок</h3>
+            <div id="bag" style="max-height:80px; overflow-y:auto; margin:10px 0;"></div>
+            <button class="btn" style="background:#2ecc71; color:white;" onclick="sellAll()">Продать всё</button>
+            <button class="btn" style="background:#333; color:#777; font-size:0.7em; margin-top:10px;" onclick="resetProgress()">Сбросить всё</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    const bosses = [
+        { id: 101, name: "Бронированный Сом", lvl: 10, phases: 1, loc: "river", reward: 2500 },
+        { id: 102, name: "Изумрудная Форель", lvl: 20, phases: 2, loc: "lake", reward: 7000 },
+        { id: 103, name: "ВЕЛИКИЙ ЦАРЬ-РЫБА", lvl: 30, phases: 5, loc: "lake", reward: 100000 }
+    ];
+
+    const fishData = [
+        { id: 1, name: "Уклейка", price: 20, xp: 15, bait: "bread", loc: "river" },
+        { id: 2, name: "Окунь", price: 60, xp: 40, bait: "worm", loc: "river" },
+        { id: 3, name: "Щука", price: 250, xp: 120, bait: "worm", loc: "river" },
+        { id: 4, name: "Карп", price: 550, xp: 200, bait: "corn", loc: "lake" },
+        { id: 5, name: "Форель", price: 3500, xp: 1000, bait: "boilies", loc: "lake" },
+        { id: 6, name: "Плотва", price: 400, xp: 1000, bait: "boilies", loc: "lake" },
+        { id: 7, name: "Сом", price: 120, xp: 90, bait: "worm", loc: "lake" },
+    ];
+
+    const baitPrices = { bread: 15, worm: 45, corn: 110, boilies: 450 };
+
+    let user = JSON.parse(localStorage.getItem('fishing_master_final')) || {
+        money: 500, lvl: 1, xp: 0, sp: 0,
+        inv: { bread: 10, worm: 0, corn: 0, boilies: 0 },
+        rod: 1, line: 1, hasSonar: false,
+        skills: { luck: 0, fast: 0 },
+        buffs: { luckTime: 0, fastTime: 0 },
+        caught: [], defeated: [], bag: [], loc: "river"
+    };
+
+    let state = 'idle', biteTimer, isNight = false, bossActive = false, curBoss = null, bossHP = 0, bossPhase = 1;
+    let tourney = { active: false, time: 0, score: 0, rivals: [] }, tourneyOffer = false;
+
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    function playSfx(f, d) {
+        try { const o = ctx.createOscillator(); const g = ctx.createGain(); o.frequency.value = f; g.gain.value = 0.02; o.connect(g); g.connect(ctx.destination); o.start(); o.stop(ctx.currentTime + d); } catch(e){}
+    }
+
+    function save() { localStorage.setItem('fishing_master_final', JSON.stringify(user)); }
+
+    function updateUI() {
+        const xpTar = user.lvl * 300;
+        document.getElementById('money').innerText = user.money;
+        document.getElementById('lvl').innerText = user.lvl;
+        document.getElementById('sp').innerText = user.sp;
+        document.getElementById('xp-bar').style.width = (user.xp/xpTar*100) + "%";
+        document.getElementById('xp-text-inside').innerText = `XP: ${user.xp} / ${xpTar}`;
+        document.getElementById('loc').innerText = user.loc === 'river' ? "Река" : "Озеро";
+        document.getElementById('time').innerText = isNight ? "Ночь 🌙" : "День ☀️";
+        document.getElementById('s-luck').innerText = user.skills.luck;
+        document.getElementById('s-fast').innerText = user.skills.fast;
+        document.getElementById('sonar-display').style.display = user.hasSonar ? 'block' : 'none';
+
+        const sel = document.getElementById('bait-select');
+        const cur = sel.value; sel.innerHTML = '';
+        for(let b in user.inv) if(user.inv[b]>0) sel.innerHTML += `<option value="${b}" ${b==cur?'selected':''}>${b.toUpperCase()} (${user.inv[b]})</option>`;
+
+        renderShop(); renderAtlas(); renderCatalog();
+        
+        const buffDiv = document.getElementById('active-buffs');
+        buffDiv.innerHTML = '';
+        if(user.buffs.luckTime > 0) buffDiv.innerHTML += `<div class="buff-active">🍀 Удача: ${user.buffs.luckTime}с</div>`;
+        if(user.buffs.fastTime > 0) buffDiv.innerHTML += `<div class="buff-active">☕ Кофе: ${user.buffs.fastTime}с</div>`;
+        if(buffDiv.innerHTML === '') buffDiv.innerHTML = '<small>Нет эффектов</small>';
+
+        document.getElementById('bag').innerHTML = user.bag.length ? user.bag.map(f=>`<div>${f.name}</div>`).join('') : "Пусто";
+        save();
+    }
+
+    function renderShop() {
+        const bs = document.getElementById('bait-shop'); bs.innerHTML = '';
+        for(let b in baitPrices) bs.innerHTML += `<button class="btn" style="background:#3498db; color:white; font-size:0.7em;" onclick="buyBait('${b}')">${b} (${baitPrices[b]}💰)</button>`;
+        document.getElementById('upgrades').innerHTML = `
+            <button class="btn" style="background:#9b59b6; color:white; font-size:0.7em;" onclick="up('rod')">Удочка Ур.${user.rod} (${user.rod*1200}💰)</button>
+            <button class="btn" style="background:#34495e; color:white; font-size:0.7em;" onclick="up('line')">Леска Ур.${user.line} (${user.line*900}💰)</button>`;
+        document.getElementById('tech-shop').innerHTML = `<button class="btn" style="background:#00e676; color:#333; font-size:0.75em;" onclick="buySonar()" ${user.hasSonar?'disabled':''}>${user.hasSonar?'Эхолот Куплен':'Эхолот (2500💰)'}</button>`;
+        document.getElementById('buff-shop').innerHTML = `
+            <button class="btn" style="background:#fff176; color:#000; font-size:0.7em;" onclick="buyBuff('luck')">Удача (400💰)</button>
+            <button class="btn" style="background:#795548; color:#fff; font-size:0.7em;" onclick="buyBuff('fast')">Кофе (400💰)</button>`;
+    }
+
+    function buyBait(b) { if(user.money >= baitPrices[b]) { user.money -= baitPrices[b]; user.inv[b]+=5; updateUI(); } }
+    function buySonar() { if(user.money >= 2500) { user.money -= 2500; user.hasSonar = true; updateUI(); } }
+    function up(t) { let cost = t === 'rod' ? user.rod*1200 : user.line*900; if(user.money >= cost) { user.money -= cost; user[t]++; updateUI(); } }
+    function buyBuff(t) { if(user.money >= 400) { user.money -= 400; user.buffs[t+'Time'] = 120; updateUI(); } }
+    function learn(s) { if(user.sp > 0) { user.sp--; user.skills[s]++; updateUI(); } }
+
+    function renderAtlas() {
+        const atl = document.getElementById('boss-atlas'); atl.innerHTML = '';
+        bosses.forEach(b => {
+            const win = user.defeated.includes(b.id);
+            atl.innerHTML += `<div class="boss-card ${win?'win':''}"><b>${win ? b.name : '??? (ур.'+b.lvl+')'}</b><br><small>${win ? 'ПОБЕЖДЕН 🏆' : 'Скрыт'}</small></div>`;
+        });
+    }
+
+    function renderCatalog() {
+        const cat = document.getElementById('catalog'); cat.innerHTML = '';
+        fishData.forEach(f => {
+            const ok = user.caught.includes(f.id);
+            cat.innerHTML += `<div class="fish-item ${ok?'unlocked':''}"> ${ok ? '🐟 '+f.name : '❔ ???'}<br><small>${ok ? f.price+'💰' : 'На: '+f.bait}</small></div>`;
+        });
+    }
+
+    // --- ТУРНИР (ПО ЖЕЛАНИЮ) ---
+    function checkTourneyOffer() {
+        if (!tourney.active && !bossActive && !tourneyOffer && Math.random() < 0.05) {
+            tourneyOffer = true;
+            document.getElementById('status').innerHTML = `<div style="background:#fff3e0; border:2px solid #ff9800; padding:10px; border-radius:10px;">
+                🏆 Турнир! Приз: 1500💰. Участвовать?<br>
+                <button onclick="acceptTourney()" class="btn" style="background:#4caf50; color:white; width:80px;">Да</button>
+                <button onclick="refuseTourney()" class="btn" style="background:#999; color:white; width:80px;">Нет</button>
+            </div>`;
+        }
+    }
+
+    window.acceptTourney = () => { tourneyOffer = false; tourney.active = true; tourney.time = 60; tourney.score = 0; tourney.rivals = [{n: "Михалыч", s: 0}, {n: "Санёк", s: 0}, {n: "Профи", s: 0}]; document.body.classList.add('tourney-active'); updateUI(); };
+    window.refuseTourney = () => { tourneyOffer = false; document.getElementById('status').innerText = "Отказ принят."; setTimeout(() => resetStatus(), 2000); };
+    function resetStatus() { document.getElementById('status').innerText = "Забрось удочку!"; }
+
+    setInterval(() => {
+        checkTourneyOffer();
+        if(tourney.active) {
+            tourney.time--;
+            document.getElementById('tourney-info').innerHTML = `<b>${tourney.time}с</b><br>` + [...tourney.rivals, {n: "ВЫ", s: tourney.score}].sort((a,b)=>b.s-a.s).map((r,i)=>`<div>${i+1}. ${r.n}: ${r.s}</div>`).join('');
+            tourney.rivals.forEach(r => { if(Math.random()<0.15) r.s += Math.floor(Math.random()*150); });
+            if(tourney.time <= 0) {
+                let leaders = [...tourney.rivals, {n: "ВЫ", s: tourney.score}].sort((a,b)=>b.s-a.s);
+                let rank = leaders.findIndex(r=>r.n==="ВЫ")+1;
+                if(rank===1) user.money += 1500; else if(rank===2) user.money += 500;
+                alert("Турнир окончен! Место: " + rank);
+                tourney.active = false; document.body.classList.remove('tourney-active'); document.getElementById('tourney-info').innerText = "Ожидание..."; updateUI();
+            }
+        }
+        if(user.buffs.luckTime > 0) user.buffs.luckTime--;
+        if(user.buffs.fastTime > 0) user.buffs.fastTime--;
+    }, 1000);
+
+    // --- ЛОВЛЯ ---
+    const actionBtn = document.getElementById('action-btn');
+    const water = document.getElementById('water-zone');
+
+    actionBtn.onclick = () => { if (state === 'idle') cast(); else if (state === 'biting') reel(); };
+
+    function cast() {
+        const b = document.getElementById('bait-select').value; if(!b) return alert("Нет наживки!");
+        user.inv[b]--; state = 'waiting'; actionBtn.innerText = 'ЖДИТЕ...'; actionBtn.disabled = true;
+        document.getElementById('float').style.display = 'block'; playSfx(200, 0.2); 
+        
+        let pFish = fishData.filter(f => f.bait === b && f.loc === user.loc);
+        let nextF = pFish[Math.floor(Math.random()*pFish.length)];
+        if(user.hasSonar) document.getElementById('sonar-text').innerText = nextF ? nextF.name.toUpperCase() : "ПУСТО";
+
+        let bChance = bosses.find(bd => bd.lvl <= user.lvl && !user.defeated.includes(bd.id) && bd.loc === user.loc);
+
+        setTimeout(() => {
+            if(bChance && Math.random() < 0.25) startBoss(bChance);
+            else {
+                state = 'biting'; actionBtn.disabled = false; actionBtn.innerText = 'ПОДСЕКАЙ!!!'; actionBtn.style.background = '#ff5722';
+                document.getElementById('float').classList.add('bite'); water.classList.add('flash'); playSfx(800, 0.1);
+                let time = 1500 + (user.rod*350) + (user.skills.fast*250) + (user.buffs.fastTime > 0 ? 500 : 0);
+                biteTimer = setTimeout(fail, time);
+            }
+        }, 1500 + Math.random()*2000);
+    }
+
+    function startBoss(b) {
+        curBoss = b; bossActive = true; bossHP = 0; bossPhase = 1;
+        document.body.classList.add('boss-active');
+        document.getElementById('boss-name').innerText = b.name;
+        document.getElementById('boss-phase').innerText = `Фаза 1/${b.phases}`;
+    }
+
+    window.hitBoss = () => {
+        if(!bossActive) return;
+        bossHP += (4 + user.rod); playSfx(400 + bossHP*2, 0.05);
+        if(bossHP >= 100) {
+            if(bossPhase < curBoss.phases) { bossPhase++; bossHP = 0; document.getElementById('boss-phase').innerText = `Фаза ${bossPhase}/${curBoss.phases}`; } 
+            else winBoss();
+        }
+        document.getElementById('hp-fill').style.width = bossHP + "%";
+    };
+
+    setInterval(() => {
+        if(bossActive) {
+            bossHP -= (1.5 + bossPhase) / (user.line * 0.6);
+            if(bossHP < 0) bossHP = 0;
+            document.getElementById('hp-fill').style.width = bossHP + "%";
+        }
+    }, 100);
+
+    function winBoss() {
+        user.defeated.push(curBoss.id); user.money += curBoss.reward;
+        if(curBoss.id === 103) { document.body.innerHTML = "<h1 style='text-align:center; padding:100px;'>🏆 ВЫ ЛЕГЕНДА! 100% ИГРЫ ПРОЙДЕНО!</h1><button onclick='resetProgress()'>Заново</button>"; return; }
+        bossActive = false; document.body.classList.remove('boss-active'); alert("БОСС ПОБЕЖДЕН!"); reset();
+    }
+
+    function reel() {
+        clearTimeout(biteTimer);
+        const b = document.getElementById('bait-select').value;
+        const possible = fishData.filter(f => f.bait === b && f.loc === user.loc);
+        if(possible.length) {
+            const f = possible[Math.floor(Math.random()*possible.length)];
+            user.bag.push({...f}); if(!user.caught.includes(f.id)) user.caught.push(f.id);
+            if(tourney.active) tourney.score += f.price;
+            user.xp += f.xp; if(user.xp >= user.lvl * 300) { user.xp=0; user.lvl++; user.sp++; alert("УРОВЕНЬ ПОВЫШЕН!"); }
+        }
+        reset();
+    }
+
+    function sellAll() {
+        let t = user.bag.reduce((s,f)=>s+f.price,0);
+        if(user.buffs.luckTime > 0) t = Math.round(t * 1.2);
+        user.money += t; user.bag = []; updateUI();
+    }
+
+    function fail() { document.getElementById('status').innerText = "Сорвалась!"; reset(); }
+    function reset() { state = 'idle'; actionBtn.innerText = 'ЗАБРОСИТЬ'; actionBtn.disabled = false; actionBtn.style.background = '#2ecc71'; document.getElementById('float').style.display = 'none'; document.getElementById('float').classList.remove('bite'); water.classList.remove('flash'); document.getElementById('sonar-text').innerText = "..."; updateUI(); }
+    function resetProgress() { if(confirm("Удалить всё?")) { localStorage.clear(); location.reload(); } }
+
+    document.getElementById('loc-btn').onclick = () => {
+        if(user.lvl < 5) return alert("🔒 Озеро закрыто! Вам нужен 5 уровень.");
+        user.loc = user.loc === 'river' ? 'lake' : 'river'; updateUI();
+    };
+
+    setInterval(() => { isNight = !isNight; document.body.className = isNight ? 'night' : 'day'; updateUI(); }, 40000);
+    updateUI();
+</script>
+</body>
+</html>
